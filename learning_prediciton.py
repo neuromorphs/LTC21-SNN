@@ -9,7 +9,10 @@ from tqdm import tqdm
 from pathlib import Path
 import datetime
 from models.predictive_model import make_model
+from models.predictive_model import make_model_LMU
 
+
+LMU_enabled = True
 experiment_name = "test1"
 data_dir = "data/Train/"
 results_dir = "results/"
@@ -76,16 +79,31 @@ for e in range(epochs):
                            # "target_position",
                            ]]
             t_max = action_df["time"].max()   # number of seconds to run
-            model, recordings = make_model(
-                action_df,
-                state_df,
-                weights=weights,
-                seed=seed,
-                n=neurons_per_dim,
-                samp_freq=samp_freq,
-                t_delay=t_delay,
-                learning_rate=learning_rate
-            )
+
+            if LMU_enabled:
+                model, recordings = make_model_LMU(
+                    action_df,
+                    state_df,
+                    weights=weights,
+                    seed=seed,
+                    n=neurons_per_dim,
+                    samp_freq=samp_freq,
+                    t_delay=t_delay,
+                    learning_rate=learning_rate
+                )
+            else: 
+                model, recordings = make_model(
+                    action_df,
+                    state_df,
+                    weights=weights,
+                    seed=seed,
+                    n=neurons_per_dim,
+                    samp_freq=samp_freq,
+                    t_delay=t_delay,
+                    learning_rate=learning_rate
+                )
+
+
             sim = nengo.Simulator(model, progress_bar=False)
             sim.run(t_max)
             weights = sim.data[recordings[P_WEIGHTS]][-1]
