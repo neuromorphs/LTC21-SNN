@@ -246,7 +246,7 @@ class LDN(nengo.Process):
 
 
 
-def make_model_LMU(action_df, state_df, weights=None, seed=42, n=100, samp_freq=50, lmu_theta=1, lmu_q=10,
+def make_model_LMU(action_df, state_df, weights=None, seed=42, n=100, samp_freq=50, lmu_theta=0.01, lmu_q=10,
                t_delay=0.02, learning_rate=5e-5):
     if weights is None:
         weights = np.zeros((4, n * 5))
@@ -282,7 +282,7 @@ def make_model_LMU(action_df, state_df, weights=None, seed=42, n=100, samp_freq=
         nengo.Connection(s, ldn[1:])
 
             # make the hidden layer
-        ens = nengo.Ensemble(n_neurons=n * 5, dimensions=5,
+        ens = nengo.Ensemble(n_neurons=n * 5, dimensions=5*lmu_q,
                              neuron_type=nengo.LIFRate(), seed=seed)
 
         #How do I connect each lmu to one dimension of ens?
