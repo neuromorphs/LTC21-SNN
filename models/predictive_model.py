@@ -246,7 +246,7 @@ class LDN(nengo.Process):
 
 
 
-def make_model_LMU(action_df, state_df, weights=None, seed=42, n=100, samp_freq=50, lmu_theta=0.01, lmu_q=10,
+def make_model_LMU(action_df, state_df, weights=None, seed=42, n=100, samp_freq=50, lmu_theta=0.1, lmu_q=20,
                t_delay=0.02, learning_rate=5e-5):
     if weights is None:
         weights = np.zeros((4, n * 5))
