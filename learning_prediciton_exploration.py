@@ -18,9 +18,9 @@ lmu_q = tuner_params['lmu_q']
 lmu_theta = tuner_params['lmu_theta']
 learning_rate = tuner_params['learning_rate']
 neurons_per_dim = tuner_params['neurons_per_dim']
-LMU_enabled = tuner_params['LMU_enabled']
+# LMU_enabled = tuner_params['LMU_enabled']
 
-# LMU_enabled = True
+LMU_enabled = True
 experiment_name = "test1"
 data_dir = "data/Train/"
 results_dir = "results/"
