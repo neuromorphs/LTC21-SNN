@@ -3,17 +3,14 @@ import numpy as np
 import nengo
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-
-mpl.use("Qt5Agg")
+#mpl.use("Qt5Agg")
 import os
 from tqdm import tqdm
 from pathlib import Path
 import datetime
-from models.predictive_model import make_model
-from models.predictive_model import make_model_LMU
+from models.predictive_model import make_model, make_model_LMU, make_model_LMU2
 
-
-LMU_enabled = True
+model_name = "LMU2"
 experiment_name = "test1"
 data_dir = "data/Train/"
 results_dir = "results/"
@@ -24,8 +21,11 @@ samp_freq = 50  # cartpole data is recorded at ~50Hz
 dt = 0.001  # nengo time step
 learning_rate = 5e-5  # lr
 t_delay = 0.02  # how far to predict the future (initial guess)
-neurons_per_dim = 100  # number of neurons representing each dimension
+neurons_per_dim = 50  # number of neurons representing each dimension
 seed = 4  # to get reproducible neuron properties across runs
+lmu_theta = 0.1  # duration of the LMU delay
+lmu_q = 5  # number of factorizations per dim in LMU
+
 
 # crating a unique folder to save the weights in
 folder_name = (
@@ -33,7 +33,7 @@ folder_name = (
     + "_"
     + str(datetime.datetime.now().time()).replace(":", ".")
 )
-run_dir = Path(results_dir, experiment_name, folder_name)
+run_dir = Path(results_dir, experiment_name, model_name, folder_name)
 run_dir.mkdir(parents=True, exist_ok=True)
 
 P_A = 0
@@ -60,15 +60,17 @@ if load_weights:
     weights = np.load(load_weights)
 else:
     print("initializing weights as zeros")
-    weights = np.zeros((4, neurons_per_dim * 5))
+    weights = None  # let the model initialize its own weights
 
 # train the model
-all_errors = []
+all_prediction_errors = []
 all_baseline_errors = []
+all_extra_errors = []
 for e in range(epochs):
     print("\nstarting epoch", e + 1)
-    epoch_mean_errors = []
-    epoch_baseline_errors = []
+    epoch_mean_prediction_errors = []
+    epoch_mean_baseline_errors = []
+    epoch_mean_extra_errors = []
     with tqdm(total=len(training_data)) as t:
         for i, df in enumerate(training_data):
             action_df = df[["time", "Q"]]
@@ -88,7 +90,7 @@ for e in range(epochs):
             ]
             t_max = action_df["time"].max()  # number of seconds to run
 
-            if LMU_enabled:
+            if model_name == "LMU":
                 model, recordings = make_model_LMU(
                     action_df,
                     state_df,
@@ -97,6 +99,21 @@ for e in range(epochs):
                     n=neurons_per_dim,
                     samp_freq=samp_freq,
                     t_delay=t_delay,
+                    lmu_theta=lmu_theta,
+                    lmu_q=lmu_q,
+                    learning_rate=learning_rate,
+                )
+            elif model_name == "LMU2":
+                model, recordings = make_model_LMU2(
+                    action_df,
+                    state_df,
+                    weights=weights,
+                    seed=seed,
+                    n=neurons_per_dim,
+                    samp_freq=samp_freq,
+                    t_delay=t_delay,
+                    lmu_theta=lmu_theta,
+                    lmu_q=lmu_q,
                     learning_rate=learning_rate,
                 )
             else:
@@ -111,20 +128,34 @@ for e in range(epochs):
                     learning_rate=learning_rate,
                 )
 
+            # run the simulation
             sim = nengo.Simulator(model, progress_bar=False)
             sim.run(t_max)
+
+            # collect the output data
             weights = sim.data[recordings[P_WEIGHTS]][-1]
             p_e = sim.data[recordings[P_E]]
             p_z = sim.data[recordings[P_Z]]
             p_z_pred = sim.data[recordings[P_Z_PRED]]
             p_s = sim.data[recordings[P_S]]
 
+            # report the prediction error
             mean_prediction_error = np.mean(np.abs(p_e))
+            epoch_mean_prediction_errors.append(mean_prediction_error)
+            all_prediction_errors.append(mean_prediction_error)
+
+            # report the difference between prediction and last state
             mean_baseline_error = np.mean(np.abs(p_z_pred - p_s))
-            epoch_mean_errors.append(mean_prediction_error)
-            epoch_baseline_errors.append(mean_baseline_error)
-            all_errors.append(mean_prediction_error)
+            epoch_mean_baseline_errors.append(mean_baseline_error)
             all_baseline_errors.append(mean_baseline_error)
+
+            # report the difference between prediction and linear extrapolation
+            p_s_extrapolation = 2 * p_s[50:] - p_s[:-50]
+            mean_extrapolation_error = np.mean(np.abs(p_z_pred[50:] - p_s_extrapolation))
+            epoch_mean_extra_errors.append(mean_extrapolation_error)
+            all_extra_errors.append(mean_extrapolation_error)
+
+            # update the loading bar
             t.set_postfix(loss="{:05.4f}".format(mean_prediction_error))
             t.update()
 
@@ -136,15 +167,22 @@ for e in range(epochs):
     plt.show()
     plt.close()
     """
-
-    print(f"\nepoch mean loss: {np.mean(epoch_mean_errors)}")
+    # save the weights
     np.save(Path(run_dir, "weights_latest"), weights)
 
-    plt.plot(range(len(all_errors)), all_errors)
+    # report epoch errors
+    print()
+    print(f"epoch mean prediction error   : {np.mean(epoch_mean_prediction_errors)}")
+    print(f"epoch mean baseline error     : {np.mean(epoch_mean_baseline_errors)}")
+    print(f"epoch mean extrapolation error: {np.mean(epoch_mean_extra_errors)}")
+
+
+    plt.plot(range(len(all_prediction_errors)), all_prediction_errors)
     plt.plot(range(len(all_baseline_errors)), all_baseline_errors)
+    plt.plot(range(len(all_extra_errors)), all_extra_errors)
     plt.xlabel("Example")
     plt.ylabel("Error")
-    plt.legend(["next state prediction", "current state"])
+    plt.legend(["next state prediction", "current state", "linear extrapolation"])
     plt.savefig(Path(run_dir, "error_curve.svg"))
-    # plt.show()
+    plt.show()
     plt.close()
