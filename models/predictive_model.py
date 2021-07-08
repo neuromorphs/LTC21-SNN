@@ -336,7 +336,7 @@ def make_model_LMU2(action_df, state_df, weights=None, seed=42, n=100, samp_freq
                t_delay=0.02, learning_rate=5e-5, radius=1.5):
 
     if weights is None:
-        weights = np.zeros((4, n*5*(1+lmu_q)))
+        weights = np.zeros((5, n*6*(1+lmu_q)))
 
     model = nengo.Network()
     with model:
@@ -351,6 +351,7 @@ def make_model_LMU2(action_df, state_df, weights=None, seed=42, n=100, samp_freq
         # this function streams the state signal from file to node
         def state_stim_func(t):
             return state_df["angle_sin"].iloc[int(t * samp_freq)], \
+                   state_df["angle_cos"].iloc[int(t * samp_freq)], \
                    state_df["angleD"].iloc[int(t * samp_freq)], \
                    state_df["position"].iloc[int(t * samp_freq)], \
                    state_df["positionD"].iloc[int(t * samp_freq)]
@@ -358,24 +359,24 @@ def make_model_LMU2(action_df, state_df, weights=None, seed=42, n=100, samp_freq
         s = nengo.Node(state_stim_func)
 
         # the value to be predicted (which in this case is just the first dimension of the input)
-        z = nengo.Node(None, size_in=4)
+        z = nengo.Node(None, size_in=5)
         nengo.Connection(s, z)
 
-        z_pred = nengo.Node(None, size_in=4)
+        z_pred = nengo.Node(None, size_in=5)
 
-        ldn = nengo.Node(LDN(theta=lmu_theta, q=lmu_q, size_in=5))
+        ldn = nengo.Node(LDN(theta=lmu_theta, q=lmu_q, size_in=6))
 
         nengo.Connection(a, ldn[0])
         nengo.Connection(s, ldn[1:])
 
         # make the hidden layer
-        ens = nengo.Ensemble(n_neurons=n*5*(1+lmu_q), dimensions=5*(1+lmu_q),
+        ens = nengo.Ensemble(n_neurons=n*6*(1+lmu_q), dimensions=6*(1+lmu_q),
                              neuron_type=nengo.LIFRate(), seed=seed, radius=radius)
 
         #How do I connect each lmu to one dimension of ens?
         nengo.Connection(a, ens[:1])
-        nengo.Connection(s, ens[1:5])
-        nengo.Connection(ldn, ens[5:])
+        nengo.Connection(s, ens[1:6])
+        nengo.Connection(ldn, ens[6:])
 
 
         # make the output weights we can learn
@@ -387,7 +388,7 @@ def make_model_LMU2(action_df, state_df, weights=None, seed=42, n=100, samp_freq
                                                              ))
 
         # compute the error by subtracting the current measurement from a delayed version of the predicton
-        error = nengo.Node(None, size_in=4)
+        error = nengo.Node(None, size_in=5)
         nengo.Connection(z_pred, error, synapse=DiscreteDelay(t_delay))
         nengo.Connection(z, error, transform=-1)
         # apply the error to the learning rule

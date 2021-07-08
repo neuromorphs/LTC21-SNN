@@ -8,14 +8,16 @@ import os
 from tqdm import tqdm
 from pathlib import Path
 import datetime
+
 from models.predictive_model import make_model, make_model_LMU, make_model_LMU2
 from plot_predictions import plot_state_prediction, plot_error_curve
+from utils.data import load_datasets, scale_datasets
 
 model_name = "LMU2"
 experiment_name = "test1"
 data_dir = "data/Validate/"
 results_dir = "results/"
-load_weights = "results/test1/LMU2/2021-07-08_11.24.25.863527/weights_latest.npy"
+load_weights = "results/test1/LMU2/2021-07-08_15.23.37.516148/weights_latest.npy"
 
 assert Path(load_weights).is_file()
 
@@ -48,15 +50,11 @@ P_E = 4
 P_WEIGHTS = 5
 
 # load training data from disk
-test_data = []
-for _, _, files in os.walk(data_dir):
-    for f in files:
-        df = pd.read_csv(data_dir + f, skiprows=28)
-        # Filter datasets that might have bounced of the edges of the track
-        if df["position"].min() < -bound or df["position"].max() > bound:
-            continue
-        test_data.append(df)
-    print(f"test data contains {len(test_data)} files")
+test_data = load_datasets(data_dir=data_dir)
+print(f"test data contains {len(test_data)} files")
+
+# scale datasets to [-1,1]
+test_data = scale_datasets(test_data)
 
 # init weights from file or empty
 print("loading weights from", load_weights)
@@ -76,7 +74,7 @@ with tqdm(total=len(test_data)) as t:
                 # "angle",
                 "angleD",
                 # "angleDD",
-                # "angle_cos",
+                "angle_cos",
                 "angle_sin",
                 "position",
                 "positionD",
@@ -146,8 +144,8 @@ with tqdm(total=len(test_data)) as t:
 
         # report the difference between prediction and linear extrapolation
         delta_t = int(t_delay / dt)
-        p_s_extrapolation = 2 * p_s[delta_t:] - p_s[:-delta_t]
-        mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - p_z[delta_t:]))
+        p_s_extrapolation = 2 * p_s[delta_t:-delta_t] - p_s[:-2*delta_t]
+        mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - p_z[2*delta_t:]))
         all_extra_errors.append(mean_extrapolation_error)
 
         # update the loading bar

@@ -1,14 +1,16 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 def plot_state_prediction(p_s, p_z_pred, p_extra=None, delta_t=20, save_path="", show=False):
 
     n_vars = p_s.shape[1]
     fig, axs = plt.subplots(n_vars, 1, sharex=True, figsize=(6, 4))
     for i in range(n_vars):
-        axs[i].plot(p_s[delta_t:, i])
-        axs[i].plot(p_z_pred[:, i])
+        timesteps = np.arange(0, p_s.shape[0])
+        axs[i].plot(timesteps, p_s[:, i])
+        axs[i].plot(timesteps[delta_t:], p_z_pred[:-delta_t, i])
         if p_extra is not None:
-            axs[i].plot(p_extra[:, i])
+            axs[i].plot(timesteps[2*delta_t:], p_extra[:, i])
     legend = ["true state", "model prediction"]
     if p_extra is not None:
         legend += ["extrapolation"]
