@@ -150,8 +150,9 @@ for e in range(epochs):
             all_baseline_errors.append(mean_baseline_error)
 
             # report the difference between prediction and linear extrapolation
-            p_s_extrapolation = 2 * p_s[50:] - p_s[:-50]
-            mean_extrapolation_error = np.mean(np.abs(p_z_pred[50:] - p_s_extrapolation))
+            delta_t = int(t_delay / dt)
+            p_s_extrapolation = 2 * p_s[delta_t:] - p_s[:-delta_t]
+            mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - p_z[delta_t:]))
             epoch_mean_extra_errors.append(mean_extrapolation_error)
             all_extra_errors.append(mean_extrapolation_error)
 
@@ -165,6 +166,7 @@ for e in range(epochs):
                     p_z,
                     p_z_pred,
                     p_extra=p_s_extrapolation,
+                    delta_t=delta_t,
                     save_path=Path(run_dir, f"prediction_e{e}_i{i}_training.svg"),
                     show=True
                 )

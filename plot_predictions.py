@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
 
-def plot_state_prediction(p_s, p_z_pred, p_extra=None, save_path="", show=False):
+def plot_state_prediction(p_s, p_z_pred, p_extra=None, delta_t=20, save_path="", show=False):
 
     n_vars = p_s.shape[1]
     fig, axs = plt.subplots(n_vars, 1, sharex=True, figsize=(6, 4))
     for i in range(n_vars):
-        axs[i].plot(p_s[20:, i])
+        axs[i].plot(p_s[delta_t:, i])
         axs[i].plot(p_z_pred[:, i])
         if p_extra is not None:
             axs[i].plot(p_extra[:, i])
