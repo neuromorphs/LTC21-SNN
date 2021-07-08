@@ -9,6 +9,7 @@ from tqdm import tqdm
 from pathlib import Path
 import datetime
 from models.predictive_model import make_model, make_model_LMU, make_model_LMU2
+from plot_predictions import plot_state_prediction, plot_error_curve
 
 model_name = "LMU2"
 experiment_name = "test1"
@@ -25,7 +26,6 @@ neurons_per_dim = 50  # number of neurons representing each dimension
 seed = 4  # to get reproducible neuron properties across runs
 lmu_theta = 0.1  # duration of the LMU delay
 lmu_q = 5  # number of factorizations per dim in LMU
-
 
 # crating a unique folder to save the weights in
 folder_name = (
@@ -159,14 +159,17 @@ for e in range(epochs):
             t.set_postfix(loss="{:05.4f}".format(mean_prediction_error))
             t.update()
 
-    """
-    plt.figure()
-    plt.plot(range(len(p_z)), p_z)
-    plt.plot(range(len(p_s)), p_s)
-    plt.plot(range(len(p_z_pred)), p_z_pred)
-    plt.show()
-    plt.close()
-    """
+            # plot the prediction
+            if (i+1) % 100 == 0:
+                fig = plot_state_prediction(
+                    p_z,
+                    p_z_pred,
+                    p_extra=p_s_extrapolation,
+                    save_path=Path(run_dir, f"prediction_e{e}_i{i}_training.svg"),
+                    show=True
+                )
+                plt.close()
+
     # save the weights
     np.save(Path(run_dir, "weights_latest"), weights)
 
@@ -176,13 +179,12 @@ for e in range(epochs):
     print(f"epoch mean baseline error     : {np.mean(epoch_mean_baseline_errors)}")
     print(f"epoch mean extrapolation error: {np.mean(epoch_mean_extra_errors)}")
 
-
-    plt.plot(range(len(all_prediction_errors)), all_prediction_errors)
-    plt.plot(range(len(all_baseline_errors)), all_baseline_errors)
-    plt.plot(range(len(all_extra_errors)), all_extra_errors)
-    plt.xlabel("Example")
-    plt.ylabel("Error")
-    plt.legend(["next state prediction", "current state", "linear extrapolation"])
-    plt.savefig(Path(run_dir, "error_curve.svg"))
-    plt.show()
+    fig = plot_error_curve(
+        all_prediction_errors,
+        all_baseline_errors,
+        all_extra_errors,
+        save_path=Path(run_dir, "error_curve.svg"),
+        show=True
+    )
     plt.close()
+

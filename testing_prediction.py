@@ -3,13 +3,13 @@ import numpy as np
 import nengo
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-mpl.use("Qt5Agg")
+#mpl.use("Qt5Agg")
 import os
 from tqdm import tqdm
 from pathlib import Path
 import datetime
 from models.predictive_model import make_model, make_model_LMU, make_model_LMU2
-from plot_predictions import plot_state_prediction
+from plot_predictions import plot_state_prediction, plot_error_curve
 
 model_name = "LMU2"
 experiment_name = "test1"
@@ -145,27 +145,25 @@ with tqdm(total=len(test_data)) as t:
         all_baseline_errors.append(mean_baseline_error)
 
         # report the difference between prediction and linear extrapolation
-        p_s_extrapolation = 2 * p_s[50:] - p_s[:-50]
-        mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - p_z[50:]))
+        delta_t = int(t_delay / dt)
+        p_s_extrapolation = 2 * p_s[delta_t:] - p_s[:-delta_t]
+        mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - p_z[delta_t:]))
         all_extra_errors.append(mean_extrapolation_error)
 
         # update the loading bar
         t.set_postfix(loss="{:05.4f}".format(mean_prediction_error))
         t.update()
 
-        plot_state_prediction(p_z, p_z_pred)
-
-        plt.figure()
-        plt.plot(range(len(p_z)), p_z)
-        plt.plot(range(len(p_z_pred)), p_z_pred)
-        plt.plot(range(len(p_s_extrapolation)), p_s_extrapolation)
-        plt.legend(["p_z A", "p_z B", "p_z C", "p_z D",
-                    "pred A", "pred B", "pred C", "pred D",
-                    "extra A", "extra B", "extra C", "extra D"])
-        plt.show()
-        plt.close()
-
-        break
+        # plot the prediction
+        if (i+1) % 10 == 0:
+            fig = plot_state_prediction(
+                p_z,
+                p_z_pred,
+                p_extra=p_s_extrapolation,
+                save_path=Path(run_dir, f"prediction_i{i}_testing.svg"),
+                show=True
+            )
+            plt.close()
 
 # report epoch errors
 print()
@@ -173,12 +171,11 @@ print(f"mean prediction error   : {np.mean(all_prediction_errors)}")
 print(f"mean baseline error     : {np.mean(all_baseline_errors)}")
 print(f"mean extrapolation error: {np.mean(all_extra_errors)}")
 
-plt.plot(range(len(all_prediction_errors)), all_prediction_errors)
-plt.plot(range(len(all_baseline_errors)), all_baseline_errors)
-plt.plot(range(len(all_extra_errors)), all_extra_errors)
-plt.xlabel("Example")
-plt.ylabel("Error")
-plt.legend(["next state prediction", "current state", "linear extrapolation"])
-plt.savefig(Path(run_dir, "error_curve.svg"))
-plt.show()
+fig = plot_error_curve(
+    all_prediction_errors,
+    all_baseline_errors,
+    all_extra_errors,
+    save_path=Path(run_dir, "error_curve.svg"),
+    show=True
+)
 plt.close()
