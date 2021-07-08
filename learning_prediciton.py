@@ -10,6 +10,7 @@ from pathlib import Path
 import datetime
 from models.predictive_model import make_model, make_model_LMU, make_model_LMU2
 from plot_predictions import plot_state_prediction, plot_error_curve
+from utils.scaling import minmax
 
 model_name = "LMU2"
 experiment_name = "test1"
@@ -45,6 +46,7 @@ P_WEIGHTS = 5
 
 # load training data from disk
 training_data = []
+
 for _, _, files in os.walk(data_dir):
     for f in files:
         df = pd.read_csv(data_dir + f, skiprows=28)
@@ -53,6 +55,17 @@ for _, _, files in os.walk(data_dir):
             continue
         training_data.append(df)
     print(f"training data contains {len(training_data)} files")
+
+pos_bound = max([x['position'].abs().max() for x in training_data])
+vel_bound = max([x['positionD'].abs().max() for x in training_data])
+angle_bound = max([x['angle_sin'].abs().max() for x in training_data])
+angle_vel_bound = max([x['angleD'].abs().max() for x in training_data])
+
+for df in training_data:
+    df['position'] = minmax(df['position'], pos_bound)
+    df['positionD'] = minmax(df['positionD'], vel_bound)
+    df['angle_sin'] = minmax(df['angle_sin'], angle_bound)
+    df['angleD'] = minmax(df['angleD'], angle_vel_bound)
 
 # init weights from file or empty
 if load_weights:
