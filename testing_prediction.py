@@ -160,6 +160,7 @@ with tqdm(total=len(test_data)) as t:
                 p_z,
                 p_z_pred,
                 p_extra=p_s_extrapolation,
+                delta_t=delta_t,
                 save_path=Path(run_dir, f"prediction_i{i}_testing.svg"),
                 show=True
             )

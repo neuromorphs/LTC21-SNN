@@ -33,8 +33,53 @@ class DiscreteDelay(nengo.synapses.Synapse):
 
         return step_delay
 
-class PredictiveModel:
+
+class LDN(nengo.Process):
+    def __init__(self, theta, q, size_in=1):
+        self.q = q  # number of internal state dimensions per input
+        self.theta = theta  # size of time window (in seconds)
+        self.size_in = size_in  # number of inputs
+
+        # Do Aaron's math to generate the matrices A and B so that
+        #  dx/dt = Ax + Bu will convert u into a legendre representation over a window theta
+        #  https://github.com/arvoelke/nengolib/blob/master/nengolib/synapses/analog.py#L536
+        A = np.zeros((q, q))
+        B = np.zeros((q, 1))
+        for i in range(q):
+            B[i] = (-1.) ** i * (2 * i + 1)
+            for j in range(q):
+                A[i, j] = (2 * i + 1) * (-1 if i < j else (-1.) ** (i - j + 1))
+        self.A = A / theta
+        self.B = B / theta
+
+        super().__init__(default_size_in=size_in, default_size_out=q * size_in)
+
+    def make_step(self, shape_in, shape_out, dt, rng, state=None):
+        state = np.zeros((self.q, self.size_in))
+
+        # Handle the fact that we're discretizing the time step
+        #  https://en.wikipedia.org/wiki/Discretization#Discretization_of_linear_state_space_models
+        Ad = scipy.linalg.expm(self.A * dt)
+        Bd = np.dot(np.dot(np.linalg.inv(self.A), (Ad - np.eye(self.q))), self.B)
+
+        # this code will be called every timestep
+        def step_legendre(t, x, state=state):
+            state[:] = np.dot(Ad, state) + np.dot(Bd, x[None, :])
+            return state.T.flatten()
+
+        return step_legendre
+
+    def get_weights_for_delays(self, r):
+        # compute the weights needed to extract the value at time r
+        # from the network (r=0 is right now, r=1 is theta seconds ago)
+        r = np.asarray(r)
+        m = np.asarray([legendre(i)(2 * r - 1) for i in range(self.q)])
+        return m.reshape(self.q, -1).T
+
+
+class PredictiveModelLMU:
     def __init__(self, seed=42, neurons_per_dim=100, sample_freq=50,
+                 lmu_theta=0.1, lmu_q=20, radius=1.5,
                  t_delay=0.02, learning_rate=5e-5, action_vars=["Q"],
                  state_vars=["angle_sin", "angleD", "position", "positionD"]):
         self.seed = seed
@@ -46,6 +91,9 @@ class PredictiveModel:
         self.action_dim = len(action_vars)
         self.state_vars = state_vars
         self.state_dim = len(state_vars)
+        self.radius = radius
+        self.lmu_q = lmu_q
+        self.lmu_theta = lmu_theta
 
     def make_model(self, action_df, state_df, weights=None):
 
@@ -67,7 +115,6 @@ class PredictiveModel:
 
             # the input to the network
             def action_stim_func(t):
-                # I have no idea if this works...
                 r = [action_df[x].iloc[int(t * self.sample_freq)] for x in self.action_vars]
                 return tuple(r)
 
@@ -86,15 +133,21 @@ class PredictiveModel:
 
             z_pred = nengo.Node(None, size_in=self.state_dim)
 
+            # make LMU unit
+            ldn = nengo.Node(LDN(theta=self.lmu_theta, q=self.lmu_q, size_in=self.state_dim + self.action_dim))
+            nengo.Connection(a, ldn[:self.action_dim])
+            nengo.Connection(s, ldn[self.action_dim:])
+
             # make the hidden layer
             ens = nengo.Ensemble(
-                n_neurons=self.neurons_per_dim * (self.state_dim + self.action_dim),
-                dimensions=(self.state_dim + self.action_dim),
+                n_neurons=self.neurons_per_dim * (self.state_dim + self.action_dim)*(1+self.lmu_q),
+                dimensions=(self.state_dim + self.action_dim)*(1+self.lmu_q),
                 neuron_type=nengo.LIFRate(),
                 seed=self.seed
             )
             nengo.Connection(a, ens[:self.action_dim])
-            nengo.Connection(s, ens[self.action_dim:])
+            nengo.Connection(s, ens[self.action_dim:self.action_dim+self.state_dim])
+            nengo.Connection(ldn, ens[self.action_dim+self.state_dim:])
 
             # make the output weights we can learn
             conn = nengo.Connection(ens.neurons, z_pred,
@@ -201,46 +254,6 @@ To use in network: ldn = nengo.Node(LDN(theta=theta, q=q))
 '''
 
 
-class LDN(nengo.Process):
-    def __init__(self, theta, q, size_in=1):
-        self.q = q              # number of internal state dimensions per input
-        self.theta = theta      # size of time window (in seconds)
-        self.size_in = size_in  # number of inputs
-
-        # Do Aaron's math to generate the matrices A and B so that
-        #  dx/dt = Ax + Bu will convert u into a legendre representation over a window theta
-        #  https://github.com/arvoelke/nengolib/blob/master/nengolib/synapses/analog.py#L536
-        A = np.zeros((q, q))
-        B = np.zeros((q, 1))
-        for i in range(q):
-            B[i] = (-1.)**i * (2*i+1)
-            for j in range(q):
-                A[i,j] = (2*i+1)*(-1 if i<j else (-1.)**(i-j+1)) 
-        self.A = A / theta
-        self.B = B / theta        
-        
-        super().__init__(default_size_in=size_in, default_size_out=q*size_in)
-
-    def make_step(self, shape_in, shape_out, dt, rng, state=None):
-        state = np.zeros((self.q, self.size_in))
-
-        # Handle the fact that we're discretizing the time step
-        #  https://en.wikipedia.org/wiki/Discretization#Discretization_of_linear_state_space_models
-        Ad = scipy.linalg.expm(self.A*dt)
-        Bd = np.dot(np.dot(np.linalg.inv(self.A), (Ad-np.eye(self.q))), self.B)
-
-        # this code will be called every timestep
-        def step_legendre(t, x, state=state):
-            state[:] = np.dot(Ad, state) + np.dot(Bd, x[None, :])
-            return state.T.flatten()
-        return step_legendre
-
-    def get_weights_for_delays(self, r):
-        # compute the weights needed to extract the value at time r
-        # from the network (r=0 is right now, r=1 is theta seconds ago)
-        r = np.asarray(r)
-        m = np.asarray([legendre(i)(2*r - 1) for i in range(self.q)])
-        return m.reshape(self.q, -1).T
 
 
 
