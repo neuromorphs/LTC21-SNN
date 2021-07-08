@@ -3,6 +3,7 @@ import numpy as np
 import nengo
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+
 mpl.use("Qt5Agg")
 import os
 from tqdm import tqdm
@@ -20,18 +21,22 @@ load_weights = "results/test1/2021-07-06_17.48.05.498405/weights_latest.npy"
 
 assert Path(load_weights).is_file()
 
-bound = 0.19            # if the cart ever leaves these bounds, the data is ignored
+bound = 0.19  # if the cart ever leaves these bounds, the data is ignored
 
 # TODO These parameters should be loaded from some model state_dict!
-samp_freq = 50          # cartpole data is recorded at ~50Hz
-dt = 0.001              # nengo time step
-learning_rate = 0       # lr
-t_delay = 0.02          # how far to predict the future (initial guess)
-neurons_per_dim = 100   # number of neurons representing each dimension
-seed = 4                # to get reproducible neuron properties across runs
+samp_freq = 50  # cartpole data is recorded at ~50Hz
+dt = 0.001  # nengo time step
+learning_rate = 0  # lr
+t_delay = 0.02  # how far to predict the future (initial guess)
+neurons_per_dim = 100  # number of neurons representing each dimension
+seed = 4  # to get reproducible neuron properties across runs
 
 # crating a unique folder to save the weights in
-folder_name = str(datetime.datetime.now().date()) + '_' + str(datetime.datetime.now().time()).replace(':', '.')
+folder_name = (
+    str(datetime.datetime.now().date())
+    + "_"
+    + str(datetime.datetime.now().time()).replace(":", ".")
+)
 run_dir = Path(results_dir, experiment_name, folder_name)
 run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -66,48 +71,52 @@ epoch_baseline_errors = []
 with tqdm(total=len(test_data)) as t:
     for i, df in enumerate(test_data):
         action_df = df[["time", "Q"]]
-        state_df = df[["time",
-                       # "angle",
-                       "angleD",
-                       # "angleDD",
-                       # "angle_cos",
-                       "angle_sin",
-                       "position",
-                       "positionD",
-                       # "positionDD",
-                       # "target_position",
-                       ]]
-        t_max = action_df["time"].max()   # number of seconds to run
+        state_df = df[
+            [
+                "time",
+                # "angle",
+                "angleD",
+                # "angleDD",
+                # "angle_cos",
+                "angle_sin",
+                "position",
+                "positionD",
+                # "positionDD",
+                # "target_position",
+            ]
+        ]
+        t_max = action_df["time"].max()  # number of seconds to run
         # TODO use the OO method of creating the model (see predictive_model.py)
 
         if LMU_enabled:
 
-          model, recordings = make_model_LMU(
-              action_df,
-              state_df,
-              weights=weights,
-              seed=seed,
-              n=neurons_per_dim,
-              samp_freq=samp_freq,
-              t_delay=t_delay,
-              learning_rate=learning_rate
-          )
+            model, recordings = make_model_LMU(
+                action_df,
+                state_df,
+                weights=weights,
+                seed=seed,
+                n=neurons_per_dim,
+                samp_freq=samp_freq,
+                t_delay=t_delay,
+                learning_rate=learning_rate,
+            )
+
         else:
 
-          model, recordings = make_model(
-              action_df,
-              state_df,
-              weights=weights,
-              seed=seed,
-              n=neurons_per_dim,
-              samp_freq=samp_freq,
-              t_delay=t_delay,
-              learning_rate=learning_rate
-          )
+            model, recordings = make_model(
+                action_df,
+                state_df,
+                weights=weights,
+                seed=seed,
+                n=neurons_per_dim,
+                samp_freq=samp_freq,
+                t_delay=t_delay,
+                learning_rate=learning_rate,
+            )
 
         sim = nengo.Simulator(model, progress_bar=False)
         sim.run(t_max)
-        #weights = sim.data[recordings[P_WEIGHTS]][-1]
+        # weights = sim.data[recordings[P_WEIGHTS]][-1]
         p_e = sim.data[recordings[P_E]]
         p_z = sim.data[recordings[P_Z]]
         p_z_pred = sim.data[recordings[P_Z_PRED]]
