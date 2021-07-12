@@ -4,5 +4,12 @@ data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
+models/__pycache__/
 *.py[cod]
 *$py.class
+
+.idea/
+
+.ipynb_checkpoints/
+
+.DS_Store
