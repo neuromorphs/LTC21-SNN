@@ -8,11 +8,11 @@ import os
 from tqdm import tqdm
 from pathlib import Path
 import datetime
-from models.predictive_model import make_model, make_model_LMU, make_model_LMU2
+from models.predictive_model import make_model, make_model_LMU, make_model_LMU2, make_model_LMU3
 from plot_predictions import plot_state_prediction, plot_error_curve
 from utils.data import load_datasets, scale_datasets
 
-model_name = "LMU2"
+model_name = "LMU3"
 experiment_name = "test1"
 data_dir = "data/Train/"
 results_dir = "results/"
@@ -74,7 +74,7 @@ for e in range(epochs):
             state_df = df[
                 [
                     "time",
-                    # "angle",
+                    "angle",
                     "angleD",
                     # "angleDD",
                     "angle_cos",
@@ -102,6 +102,19 @@ for e in range(epochs):
                 )
             elif model_name == "LMU2":
                 model, recordings = make_model_LMU2(
+                    action_df,
+                    state_df,
+                    weights=weights,
+                    seed=seed,
+                    n=neurons_per_dim,
+                    samp_freq=samp_freq,
+                    t_delay=t_delay,
+                    lmu_theta=lmu_theta,
+                    lmu_q=lmu_q,
+                    learning_rate=learning_rate,
+                )
+            elif model_name == "LMU3":
+                model, recordings = make_model_LMU3(
                     action_df,
                     state_df,
                     weights=weights,

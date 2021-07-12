@@ -350,11 +350,11 @@ def make_model_LMU2(action_df, state_df, weights=None, seed=42, n=100, samp_freq
 
         # this function streams the state signal from file to node
         def state_stim_func(t):
-            return state_df["angle_sin"].iloc[int(t * samp_freq)], \
-                   state_df["angle_cos"].iloc[int(t * samp_freq)], \
-                   state_df["angleD"].iloc[int(t * samp_freq)], \
-                   state_df["position"].iloc[int(t * samp_freq)], \
-                   state_df["positionD"].iloc[int(t * samp_freq)]
+            return  state_df["angle_sin"].iloc[int(t * samp_freq)], \
+                    state_df["angle_cos"].iloc[int(t * samp_freq)], \
+                    state_df["angleD"].iloc[int(t * samp_freq)], \
+                    state_df["position"].iloc[int(t * samp_freq)], \
+                    state_df["positionD"].iloc[int(t * samp_freq)]
 
         s = nengo.Node(state_stim_func)
 
@@ -408,7 +408,81 @@ def make_model_LMU2(action_df, state_df, weights=None, seed=42, n=100, samp_freq
 
     return model, [p_a, p_s, p_z, p_z_pred, p_e, p_weights]
 
+def make_model_LMU3(action_df, state_df, weights=None, seed=42, n=100, samp_freq=50, lmu_theta=0.1, lmu_q=20,   # LMU2 but with 'angle' state
+                        t_delay=0.02, learning_rate=5e-5, radius=1.5):
 
+    if weights is None:
+        weights = np.zeros((6, n * 7 * (1 + lmu_q)))
+
+    model = nengo.Network()
+    with model:
+        model.config[nengo.Connection].synapse = None  # set the default synapse to None (normal default is 0.005s)
+
+        # the input to the network
+        def action_stim_func(t):
+            return action_df["Q"].iloc[int(t * samp_freq)]
+
+        a = nengo.Node(action_stim_func)
+
+        # this function streams the state signal from file to node
+        def state_stim_func(t):
+            return state_df["angle"].iloc[int(t * samp_freq)], \
+                    state_df["angleD"].iloc[int(t * samp_freq)], \
+                    state_df["angle_sin"].iloc[int(t * samp_freq)], \
+                    state_df["angle_cos"].iloc[int(t * samp_freq)], \
+                    state_df["position"].iloc[int(t * samp_freq)], \
+                    state_df["positionD"].iloc[int(t * samp_freq)]
+
+        s = nengo.Node(state_stim_func)
+
+        # the value to be predicted (which in this case is just the first dimension of the input)
+        z = nengo.Node(None, size_in=6)
+        nengo.Connection(s, z)
+
+        z_pred = nengo.Node(None, size_in=6)
+
+        ldn = nengo.Node(LDN(theta=lmu_theta, q=lmu_q, size_in=7))
+
+        nengo.Connection(a, ldn[0])
+        nengo.Connection(s, ldn[1:])
+
+        # make the hidden layer
+        ens = nengo.Ensemble(n_neurons=n * 7 * (1 + lmu_q), dimensions=7 * (1 + lmu_q),
+                                 neuron_type=nengo.LIFRate(), seed=seed, radius=radius)
+
+        # How do I connect each lmu to one dimension of ens?
+        nengo.Connection(a, ens[:1])
+        nengo.Connection(s, ens[1:7])
+        nengo.Connection(ldn, ens[7:])
+
+        # make the output weights we can learn
+        conn = nengo.Connection(ens.neurons, z_pred,
+                                transform=weights,  # change this if you have pre-recorded weights to use
+                                learning_rule_type=nengo.PES(learning_rate=learning_rate,
+                                                            pre_synapse=DiscreteDelay(t_delay)
+                                                            # delay the activity value when updating weights
+                                                            ))
+
+        # compute the error by subtracting the current measurement from a delayed version of the predicton
+        error = nengo.Node(None, size_in=6)
+        nengo.Connection(z_pred, error, synapse=DiscreteDelay(t_delay))
+        nengo.Connection(z, error, transform=-1)
+        # apply the error to the learning rule
+        nengo.Connection(error, conn.learning_rule)
+
+        # record the input to the network
+        p_a = nengo.Probe(a)
+        p_s = nengo.Probe(s)
+        # record the value to be predicted
+        p_z = nengo.Probe(z)
+        # record the prediction
+        p_z_pred = nengo.Probe(z_pred)
+        # record the error
+        p_e = nengo.Probe(error)
+        # record the weights (but only every 0.1 seconds just to save memory)
+        p_weights = nengo.Probe(conn, 'weights', sample_every=0.1)
+
+    return model, [p_a, p_s, p_z, p_z_pred, p_e, p_weights]
 
 # class PredictiveModel_LMU:
 #     def __init__(self, seed=42, neurons_per_dim=100, sample_freq=50, lmu_theta=1, lmu_q=10,
