@@ -1,3 +1,26 @@
+'''
+TODO
+
+Script to learn weights offline using nengo_dl. 
+The purpose is to perform batch training and also to optimize the input weights
+using back-prop
+
+Hint: 
+# inputs
+x, y, and z are name of input nodes
+data = {x: np.random.uniform(-1, 1, size=(1024, 1, 1)),
+        y: np.random.uniform(-1, 1, size=(1024, 1, 1)),
+        z: np.random.uniform(-1, 1, size=(1024, 1, 1))}
+
+Each input should have shape (number of training examples, number of simulation timesteps, input dimensionality)
+
+f_p is probe connected to the output node
+# targets
+data[f_p] = target_func(data[x], data[y], data[z])
+https://www.nengo.ai/nengo-dl/v2.1.0/examples/nef-init.html
+
+'''
+
 import pandas as pd
 import numpy as np
 import nengo
@@ -8,11 +31,14 @@ import os
 from tqdm import tqdm
 from pathlib import Path
 import datetime
-from models.predictive_model import make_model, make_model_LMU, make_model_LMU2, make_model_LMU3
+from models.predictive_model import make_model, make_model_LMU, make_model_LMU2
 from plot_predictions import plot_state_prediction, plot_error_curve
 from utils.data import load_datasets, scale_datasets
 
-model_name = "LMU3"
+import nengo_dl
+import tensorflow as tf
+
+model_name = "LMU2"
 experiment_name = "test1"
 data_dir = "data/Train/"
 results_dir = "results/"
@@ -22,7 +48,7 @@ epochs = 10  # number or epochs for training
 samp_freq = 50  # cartpole data is recorded at ~50Hz
 dt = 0.001  # nengo time step
 learning_rate = 5e-5  # lr
-t_delay = 0.1  # how far to predict the future (initial guess)
+t_delay = 0.02  # how far to predict the future (initial guess)
 neurons_per_dim = 50  # number of neurons representing each dimension
 seed = 4  # to get reproducible neuron properties across runs
 lmu_theta = 0.1  # duration of the LMU delay
@@ -63,6 +89,10 @@ else:
 all_prediction_errors = []
 all_baseline_errors = []
 all_extra_errors = []
+
+opt = tf.train.MomentumOptimizer(learning_rate=0.002, momentum=0.9,
+                                 use_nesterov=True)
+
 for e in range(epochs):
     print("\nstarting epoch", e + 1)
     epoch_mean_prediction_errors = []
@@ -74,7 +104,7 @@ for e in range(epochs):
             state_df = df[
                 [
                     "time",
-                    "angle",
+                    # "angle",
                     "angleD",
                     # "angleDD",
                     "angle_cos",
@@ -113,19 +143,6 @@ for e in range(epochs):
                     lmu_q=lmu_q,
                     learning_rate=learning_rate,
                 )
-            elif model_name == "LMU3":
-                model, recordings = make_model_LMU3(
-                    action_df,
-                    state_df,
-                    weights=weights,
-                    seed=seed,
-                    n=neurons_per_dim,
-                    samp_freq=samp_freq,
-                    t_delay=t_delay,
-                    lmu_theta=lmu_theta,
-                    lmu_q=lmu_q,
-                    learning_rate=learning_rate,
-                )
             else:
                 model, recordings = make_model(
                     action_df,
@@ -139,7 +156,7 @@ for e in range(epochs):
                 )
 
             # run the simulation
-            sim = nengo.Simulator(model, progress_bar=False)
+            sim = nengo_dl.Simulator(model, progress_bar=False)
             sim.run(t_max)
 
             # collect the output data
@@ -149,19 +166,18 @@ for e in range(epochs):
             p_z_pred = sim.data[recordings[P_Z_PRED]]
             p_s = sim.data[recordings[P_S]]
 
-            # report the prediction error (next state - predicted next state)
+            # report the prediction error
             mean_prediction_error = np.mean(np.abs(p_e))
             epoch_mean_prediction_errors.append(mean_prediction_error)
             all_prediction_errors.append(mean_prediction_error)
 
-            delta_t = int(t_delay / dt)
-            # report the difference between current state and next state
-            #mean_baseline_error = np.mean(np.abs(p_z_pred - p_s))
-            mean_baseline_error = np.mean(np.abs(p_s[:-delta_t] - p_s[delta_t:]))
+            # report the difference between prediction and last state
+            mean_baseline_error = np.mean(np.abs(p_z_pred - p_s))
             epoch_mean_baseline_errors.append(mean_baseline_error)
             all_baseline_errors.append(mean_baseline_error)
 
             # report the difference between prediction and linear extrapolation
+            delta_t = int(t_delay / dt)
             p_s_extrapolation = 2 * p_s[delta_t:-delta_t] - p_s[:-2*delta_t]
             mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - p_z[2*delta_t:]))
             epoch_mean_extra_errors.append(mean_extrapolation_error)
@@ -172,7 +188,7 @@ for e in range(epochs):
             t.update()
 
             # plot the prediction
-            if i % 100 == 0:
+            if (i+1) % 100 == 0:
                 fig = plot_state_prediction(
                     p_z,
                     p_z_pred,

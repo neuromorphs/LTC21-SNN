@@ -9,7 +9,6 @@ models/__pycache__/
 *$py.class
 
 .idea/
-
 .ipynb_checkpoints/
 
 *.DS_Store
