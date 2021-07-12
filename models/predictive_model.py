@@ -93,7 +93,6 @@ class DataParser:
     def update_data(self, data_df):
         self.data_df = data_df
 
-
 class PredictiveModelLMU2:
     def __init__(self, seed=42, neurons_per_dim=100, sample_freq=50,
                  lmu_theta=0.1, lmu_q=20, radius=1.5, dt=0.001,
