@@ -1,37 +1,26 @@
-import pandas as pd
 import numpy as np
-import nengo
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 #mpl.use("Qt5Agg")
-import os
 from tqdm import tqdm
 from pathlib import Path
 import datetime
-
-from models.predictive_model import make_model, make_model_LMU, make_model_LMU2
+from models.predictive_model import PredictiveModelLMU
 from plot_predictions import plot_state_prediction, plot_error_curve
 from utils.data import load_datasets, scale_datasets
+import pickle
+import time
 
-model_name = "LMU2"
-experiment_name = "test1"
+# setup some parameters
+# TODO these should come from an argparser or config file!
+model_name = "LMU_model"
+experiment_name = "testing"
 data_dir = "data/Validate/"
 results_dir = "results/"
-load_weights = "results/test1/LMU2/2021-07-08_17.14.12.310579/weights_latest.npy"
-
-assert Path(load_weights).is_file()
-
+load_state = "results/test1/LMU_model/2021-07-12_14.28.08.184663/model_state.pkl"
 bound = 0.19  # if the cart ever leaves these bounds, the data is ignored
-
-# TODO These parameters should be loaded from some model state_dict!
-samp_freq = 50  # cartpole data is recorded at ~50Hz
-dt = 0.001  # nengo time step
-learning_rate = 0  # lr should be 0 when testing
-t_delay = 0.1  # how far to predict the future (initial guess)
-neurons_per_dim = 50  # number of neurons representing each dimension
-seed = 4  # to get reproducible neuron properties across runs
-lmu_theta = 0.1  # duration of the LMU delay
-lmu_q = 5  # number of factorizations per dim in LMU
+plot_prediction_every = 1  # how often to plot a prediction curve during testing
+max_samples = -1  # just reduce test set for quick debugging (-1 = use all data)
 
 # crating a unique folder to save the weights in
 folder_name = (
@@ -42,140 +31,114 @@ folder_name = (
 run_dir = Path(results_dir, experiment_name, model_name, folder_name)
 run_dir.mkdir(parents=True, exist_ok=True)
 
-P_A = 0
-P_S = 1
-P_Z = 2
-P_Z_PRED = 3
-P_E = 4
-P_WEIGHTS = 5
-
 # load training data from disk
-test_data = load_datasets(data_dir=data_dir)
-print(f"test data contains {len(test_data)} files")
+test_data = load_datasets(data_dir, bound=bound)
+print(f"training data contains {len(test_data)} files")
+
+# load parameters from state dict
+print("loading model state from", load_state)
+with open(load_state, "rb") as f:
+    model_state = pickle.load(f)
+scales = model_state["scales"]
+t_delays = model_state["t_delays"]
+action_vars = model_state["action_vars"]
+state_vars = model_state["state_vars"]
+dt = model_state["dt"]
+
+# set the learning rate to 0 during testing
+model_state["learning_rate"] = 0.0
 
 # scale datasets to [-1,1]
-test_data = scale_datasets(test_data)
+print("detected scaling factors:")
+for k, v in scales.items():
+    print(f"{k:15s}  :  {v:3.3f}")
+test_data = scale_datasets(test_data, scales)
 
-# init weights from file or empty
-print("loading weights from", load_weights)
-weights = np.load(load_weights)
+# initialize the model with loaded parameters
+model = PredictiveModelLMU(**model_state)
 
-# test the model
-all_prediction_errors = []
-all_baseline_errors = []
-all_extra_errors = []
-print("\nstarting model evaluation")
-with tqdm(total=len(test_data)) as t:
-    for i, df in enumerate(test_data):
-        action_df = df[["time", "Q"]]
-        state_df = df[
-            [
-                "time",
-                # "angle",
-                "angleD",
-                # "angleDD",
-                "angle_cos",
-                "angle_sin",
-                "position",
-                "positionD",
-                # "positionDD",
-                # "target_position",
-            ]
-        ]
-        t_max = action_df["time"].max()  # number of seconds to run
-        # TODO use the OO method of creating the model (see predictive_model.py)
+# record the training error over time
+all_mean_prediction_errors = [[] for _ in t_delays]
+all_mean_baseline_errors = [[] for _ in t_delays]
+all_mean_extra_errors = [[] for _ in t_delays]
 
-        if model_name == "LMU":
-            model, recordings = make_model_LMU(
-                action_df,
-                state_df,
-                weights=weights,
-                seed=seed,
-                n=neurons_per_dim,
-                samp_freq=samp_freq,
-                t_delay=t_delay,
-                lmu_theta=lmu_theta,
-                lmu_q=lmu_q,
-                learning_rate=learning_rate,
-            )
-        elif model_name == "LMU2":
-            model, recordings = make_model_LMU2(
-                action_df,
-                state_df,
-                weights=weights,
-                seed=seed,
-                n=neurons_per_dim,
-                samp_freq=samp_freq,
-                t_delay=t_delay,
-                lmu_theta=lmu_theta,
-                lmu_q=lmu_q,
-                learning_rate=learning_rate,
-            )
-        else:
-            model, recordings = make_model(
-                action_df,
-                state_df,
-                weights=weights,
-                seed=seed,
-                n=neurons_per_dim,
-                samp_freq=samp_freq,
-                t_delay=t_delay,
-                learning_rate=learning_rate,
-            )
+start_time = time.time()
+
+# loop over the training dataset
+with tqdm(total=len(test_data[:max_samples])) as t:
+    for i, df in enumerate(test_data[:max_samples]):
+
+        # reset the model neurons
+        model.reset_sim()
+
+        # pass the training data
+        action_df = df[["time"] + action_vars]
+        state_df = df[["time"] + state_vars]
+        model.set_inputs(action_df, state_df)
 
         # run the simulation
-        sim = nengo.Simulator(model, progress_bar=False)
-        sim.run(t_max)
+        recordings = model.process_files()
 
         # collect the output data
-        weights = sim.data[recordings[P_WEIGHTS]][-1]
-        p_e = sim.data[recordings[P_E]]
-        p_z = sim.data[recordings[P_Z]]
-        p_z_pred = sim.data[recordings[P_Z_PRED]]
-        p_s = sim.data[recordings[P_S]]
+        actions = model.sim.data[recordings["actions"]]
+        states = model.sim.data[recordings["states"]]
 
-        # report the prediction error (next state - predicted next state)
-        mean_prediction_error = np.mean(np.abs(p_e))
-        all_prediction_errors.append(mean_prediction_error)
+        for j, t_d in enumerate(t_delays):
 
-        delta_t = int(t_delay / dt)
-        # report the difference between current state and next state
-        # mean_baseline_error = np.mean(np.abs(p_z_pred - p_s))
-        mean_baseline_error = np.mean(np.abs(p_s[:-delta_t] - p_s[delta_t:]))
-        all_baseline_errors.append(mean_baseline_error)
+            # retrieve network output based on delay
+            predicted_states = model.sim.data[recordings["predictions"][f"{j}"]["states_pred"]]
+            prediction_errors = model.sim.data[recordings["predictions"][f"{j}"]["errors"]]
 
-        # report the difference between prediction and linear extrapolation
-        p_s_extrapolation = 2 * p_s[delta_t:-delta_t] - p_s[:-2 * delta_t]
-        mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - p_z[2 * delta_t:]))
-        all_extra_errors.append(mean_extrapolation_error)
+            # report the prediction error (next state - predicted next state)
+            mean_prediction_error = np.mean(np.abs(prediction_errors))
+            all_mean_prediction_errors[j].append(mean_prediction_error)
+
+            delta_t = int(t_d / dt)  # number of network simulated timesteps for lookahead
+            # report the difference between current state and next state
+            mean_baseline_error = np.mean(np.abs(states[:-delta_t] - states[delta_t:]))
+            all_mean_baseline_errors[j].append(mean_baseline_error)
+
+            # report the difference between prediction and linear extrapolation
+            p_s_extrapolation = 2 * states[delta_t:-delta_t] - states[:-2*delta_t]
+            mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - states[2*delta_t:]))
+            all_mean_extra_errors[j].append(mean_extrapolation_error)
+
+            # plot the prediction
+            if (i % plot_prediction_every) == 0:
+                fig = plot_state_prediction(
+                    states,
+                    predicted_states,
+                    p_extra=p_s_extrapolation,
+                    delta_t=delta_t,
+                    state_vars=state_vars,
+                    save_path=Path(run_dir, f"prediction_i{i}_td{delta_t}_testing.svg"),
+                    show=True
+                )
+                plt.close()
 
         # update the loading bar
         t.set_postfix(loss="{:05.4f}".format(mean_prediction_error))
         t.update()
 
-        # plot the prediction
-        if i % 1 == 0:
-            fig = plot_state_prediction(
-                p_z,
-                p_z_pred,
-                p_extra=p_s_extrapolation,
-                delta_t=delta_t,
-                save_path=Path(run_dir, f"prediction_i{i}_testing.svg"),
-                show=True
-            )
-            plt.close()
+runtime = time.time() - start_time
+print(f"test data processing time: {int(runtime//60)}m {runtime%60:.3f}s")
 
-# report epoch errors
-print()
-print(f"mean prediction error   : {np.mean(all_prediction_errors)}")
-print(f"mean baseline error     : {np.mean(all_baseline_errors)}")
-print(f"mean extrapolation error: {np.mean(all_extra_errors)}")
+for j, t_d in enumerate(t_delays):
 
-fig = plot_error_curve(
-    all_prediction_errors,
-    all_baseline_errors,
-    all_extra_errors,
-    save_path=Path(run_dir, "error_curve.svg"),
-    show=True
-)
-plt.close()
+    # report epoch errors
+    print()
+    print(f"prediction delay = {t_d}")
+    print()
+    print(f"mean prediction error   : {np.mean(all_mean_prediction_errors[j])}")
+    print(f"mean baseline error     : {np.mean(all_mean_baseline_errors[j])}")
+    print(f"mean extrapolation error: {np.mean(all_mean_extra_errors[j])}")
+
+    fig = plot_error_curve(
+        all_mean_prediction_errors[j],
+        all_mean_baseline_errors[j],
+        all_mean_extra_errors[j],
+        t_delay=t_d,
+        save_path=Path(run_dir, f"error_curve_td{t_d}.svg"),
+        show=True
+    )
+    plt.close()
