@@ -17,7 +17,7 @@ model_name = "LMU2"
 experiment_name = "test1"
 data_dir = "data/Validate/"
 results_dir = "results/"
-load_weights = "results/test1/LMU2/2021-07-08_15.23.37.516148/weights_latest.npy"
+load_weights = "results/test1/LMU2/2021-07-08_17.14.12.310579/weights_latest.npy"
 
 assert Path(load_weights).is_file()
 
@@ -27,7 +27,7 @@ bound = 0.19  # if the cart ever leaves these bounds, the data is ignored
 samp_freq = 50  # cartpole data is recorded at ~50Hz
 dt = 0.001  # nengo time step
 learning_rate = 0  # lr should be 0 when testing
-t_delay = 0.02  # how far to predict the future (initial guess)
+t_delay = 0.1  # how far to predict the future (initial guess)
 neurons_per_dim = 50  # number of neurons representing each dimension
 seed = 4  # to get reproducible neuron properties across runs
 lmu_theta = 0.1  # duration of the LMU delay
@@ -134,18 +134,19 @@ with tqdm(total=len(test_data)) as t:
         p_z_pred = sim.data[recordings[P_Z_PRED]]
         p_s = sim.data[recordings[P_S]]
 
-        # report the prediction error
+        # report the prediction error (next state - predicted next state)
         mean_prediction_error = np.mean(np.abs(p_e))
         all_prediction_errors.append(mean_prediction_error)
 
-        # report the difference between prediction and last state
-        mean_baseline_error = np.mean(np.abs(p_z_pred - p_s))
+        delta_t = int(t_delay / dt)
+        # report the difference between current state and next state
+        # mean_baseline_error = np.mean(np.abs(p_z_pred - p_s))
+        mean_baseline_error = np.mean(np.abs(p_s[:-delta_t] - p_s[delta_t:]))
         all_baseline_errors.append(mean_baseline_error)
 
         # report the difference between prediction and linear extrapolation
-        delta_t = int(t_delay / dt)
-        p_s_extrapolation = 2 * p_s[delta_t:-delta_t] - p_s[:-2*delta_t]
-        mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - p_z[2*delta_t:]))
+        p_s_extrapolation = 2 * p_s[delta_t:-delta_t] - p_s[:-2 * delta_t]
+        mean_extrapolation_error = np.mean(np.abs(p_s_extrapolation - p_z[2 * delta_t:]))
         all_extra_errors.append(mean_extrapolation_error)
 
         # update the loading bar
@@ -153,7 +154,7 @@ with tqdm(total=len(test_data)) as t:
         t.update()
 
         # plot the prediction
-        if (i+1) % 10 == 0:
+        if i % 1 == 0:
             fig = plot_state_prediction(
                 p_z,
                 p_z_pred,

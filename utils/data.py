@@ -15,16 +15,19 @@ def load_datasets(data_dir, bound=0.19):
             data.append(df)
     return data
 
-def scale_datasets(data):
+def scale_datasets(data, state_vars):
     '''Scale inputs in a list of datasets to -1, 1'''
-    # Find the absolute maximum value for each state 
-    pos_bound = max([x['position'].abs().max() for x in data])
-    vel_bound = max([x['positionD'].abs().max() for x in data])
-    angle_vel_bound = max([x['angleD'].abs().max() for x in data])
+
+    scales = {}
+    # Find the absolute maximum value for each state
+    for var in state_vars:
+        bound = max([x[var].abs().max() for x in data])
+        scales.update({var: bound})
 
     # Scale all datasets to [-1, 1] based on the maximum value found above
     for df in data:
-        df['position'] = minmax(df['position'], pos_bound)
-        df['positionD'] = minmax(df['positionD'], vel_bound)
-        df['angleD'] = minmax(df['angleD'], angle_vel_bound)
-    return data
+        for var, bound in scales.items():
+            df[var] = minmax(df[var], bound)
+
+    # return scaled data and scaling factor for reconstruction
+    return data, scales
