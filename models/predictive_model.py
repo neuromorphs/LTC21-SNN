@@ -4,6 +4,8 @@ import pandas as pd
 import scipy.linalg
 from scipy.special import legendre
 import pickle
+# import nengo_ocl
+from nengolib import RLS
 
 # TODO MAKE THE MODELS AS OBJECT CLASSES
 # TODO ADD DOCUMENTATION
@@ -154,6 +156,7 @@ class PredictiveModelLMU:
 
         self.model, self.recordings = self.make_model()
         self.sim = nengo.Simulator(self.model, dt=self.dt, progress_bar=False)
+        # self.sim = nengo_ocl.Simulator(self.model, dt=self.dt, progress_bar=False)
 
     def set_inputs(self, action_df, state_df):
 
@@ -286,6 +289,10 @@ class PredictiveModelLMU:
                         z_preds[-1],
                         transform=self.weights[i],  # change this if you have pre-recorded weights to use
                         seed=self.seed,
+                        # learning_rule_type=RLS(
+                        #     learning_rate=self.learning_rate,
+                        #     pre_synapse=DiscreteDelay(t_d)  # delay the activity value when updating weights
+                        # )
                         learning_rule_type=nengo.PES(
                             learning_rate=self.learning_rate,
                             pre_synapse=DiscreteDelay(t_d)  # delay the activity value when updating weights
