@@ -289,14 +289,14 @@ class PredictiveModelLMU:
                         z_preds[-1],
                         transform=self.weights[i],  # change this if you have pre-recorded weights to use
                         seed=self.seed,
-                        # learning_rule_type=RLS(
-                        #     learning_rate=self.learning_rate,
-                        #     pre_synapse=DiscreteDelay(t_d)  # delay the activity value when updating weights
-                        # )
-                        learning_rule_type=nengo.PES(
+                        learning_rule_type=RLS(
                             learning_rate=self.learning_rate,
                             pre_synapse=DiscreteDelay(t_d)  # delay the activity value when updating weights
                         )
+                        # learning_rule_type=nengo.PES(
+                        #     learning_rate=self.learning_rate,
+                        #     pre_synapse=DiscreteDelay(t_d)  # delay the activity value when updating weights
+                        # )
                     )
                 )
 
