@@ -10,6 +10,7 @@ from plot_predictions import plot_state_prediction, plot_error_curve
 from utils.data import load_datasets, get_scaling_factor, scale_datasets
 import pickle
 import time
+# import nengo_ocl
 
 # setup some parameters
 # TODO these should come from an argparser or config file!
