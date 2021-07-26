@@ -9,13 +9,13 @@ def plot_state_prediction(p_s, p_z_pred, p_extra=None, delta_t=20, state_vars=[]
     plt.suptitle(f"delta t = {delta_t}")
     legend = ["true state", "model prediction"]
     if p_extra is not None:
-        legend += ["extrapolation"]
+        legend = ["true state", "extrapolation", "model prediction"]
     for i in range(n_vars):
         timesteps = np.arange(0, p_s.shape[0])
         axs[i].plot(timesteps, p_s[:, i])
-        axs[i].plot(timesteps[delta_t:], p_z_pred[:-delta_t, i])
         if p_extra is not None:
             axs[i].plot(timesteps[2*delta_t:], p_extra[:, i])
+        axs[i].plot(timesteps[delta_t:], p_z_pred[:-delta_t, i])
         axs[i].set_ylabel(state_vars[i], rotation=45)
         axs[i].spines['right'].set_visible(False)
         axs[i].spines['top'].set_visible(False)
@@ -26,7 +26,7 @@ def plot_state_prediction(p_s, p_z_pred, p_extra=None, delta_t=20, state_vars=[]
                bbox_to_anchor=(0.5, .95),
                frameon=False
                )
-    plt.xlabel("t [ms]")
+    plt.xlabel("t [steps]")
     plt.yticks(rotation=45)
     plt.tight_layout()
 
@@ -43,11 +43,13 @@ def plot_error_curve(all_prediction_errors, all_baseline_errors, all_extra_error
     
     fig = plt.figure()
     plt.plot(range(len(all_prediction_errors)), all_prediction_errors)
-    plt.plot(range(len(all_baseline_errors)), all_baseline_errors)
-    plt.plot(range(len(all_extra_errors)), all_extra_errors)
+    plt.hlines(np.mean(all_baseline_errors), 0, len(all_baseline_errors), colors="r")
+    plt.hlines(np.mean(all_extra_errors), 0, len(all_extra_errors), colors="g")
+    #plt.plot(range(len(all_baseline_errors)), all_baseline_errors)
+    #plt.plot(range(len(all_extra_errors)), all_extra_errors)
     plt.xlabel("Example")
     plt.ylabel("Error")
-    plt.legend(["next state prediction", "current state", "linear extrapolation"], frameon=False)
+    plt.legend(["current state", "linear extrapolation", "next state prediction"], frameon=False)
     plt.title(f"delay t = {t_delay}")
     plt.ylim(bottom=0)
     

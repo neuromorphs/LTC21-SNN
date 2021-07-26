@@ -1,18 +1,25 @@
 import os
 import pandas as pd
-
+import numpy as np
 from utils.scaling import minmax
 
-def load_datasets(data_dir, bound=0.19):
+def load_datasets(data_dir, bound=0.19, nrows=200, skiprows=28, shuffle=True):
     '''Load a list of datasets from a given data directory'''
     data = []
     for _, _, files in os.walk(data_dir):
         for f in files:
-            df = pd.read_csv(data_dir + f, skiprows=28)
-            # Filter datasets that might have bounced of the edges of the track
-            if df["position"].min() < -bound or df["position"].max() > bound:
-                continue
-            data.append(df)
+            if f.endswith(".csv"):
+                df = pd.read_csv(data_dir + f, skiprows=skiprows, nrows=nrows)
+                # Filter datasets that might have bounced of the edges of the track
+                if df["position"].min() < -bound or df["position"].max() > bound:
+                    continue
+                try:
+                    df = df.round({'time': 3})
+                except:
+                    raise ValueError('Input dataframe needs to have a column called "time".')
+                data.append(df)
+    if shuffle:
+        np.random.shuffle(data)
     return data
 
 def scale_datasets(data, scales):
