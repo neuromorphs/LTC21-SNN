@@ -30,7 +30,7 @@ results_dir : results/            # folder to save the plots and weights to
 experiment_name : training        # sub-folder of results folder
 
 # training process parameters
-epochs : 10                       # number or epochs for training
+epochs : 1                       # number or epochs for training
 learning_rate : 0.00001           # learning rate used in online learning
 save_state_every : 200            # how often to save the weights of the model during epoch
 plot_prediction_every : 200       # how often to plot a prediction curve during learning

@@ -151,7 +151,7 @@ class PredictiveModelAutoregressiveLMU:
                  state_vars=["angle_sin", "angle_cos", "angleD", "position", "positionD"],
                  action_df=None, state_df=None, weights=None, scales={},
                  predict_delta=True, error="normal", t_switch=4.0, t_init=0.1,
-                 *args, **kwargs):
+                 model_name="AutoregressiveLMU", *args, **kwargs):
 
         self.seed = seed
         self.neurons_per_dim = neurons_per_dim
@@ -172,6 +172,7 @@ class PredictiveModelAutoregressiveLMU:
         self.t_switch = t_switch
         self.t_init = t_init
         self.error = error
+        self.model_name = model_name
 
 
         if action_df is None:
@@ -272,6 +273,7 @@ class PredictiveModelAutoregressiveLMU:
             "error": self.error,
             "t_switch": self.t_switch,
             "t_init": self.t_init,
+            "model_name": self.model_name
         }
 
         return state_dict

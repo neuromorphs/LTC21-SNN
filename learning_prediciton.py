@@ -42,7 +42,6 @@ if config["load_state"]:
     print("loading model state from", config["load_state"])
     with open(config["load_state"], "rb") as f:
         model_state = pickle.load(f)
-
     model = PredictiveModelAutoregressiveLMU(**model_state)
 else:
     # init the model object with zero weights
@@ -148,9 +147,9 @@ for e in range(1, config["epochs"]+1):
                 plt.show()
                 plt.close()
 
-                # save the weights
-                if (i % config["save_state_every"]) == 0:
-                    model.save_state_dict(Path(run_dir, "model_state.pkl"))
+            # save the weights
+            if (i % config["save_state_every"]) == 0:
+                model.save_state_dict(Path(run_dir, "model_state.pkl"))
 
             # update the loading bar
             t.set_postfix(loss="{:05.4f}".format(mean_prediction_error))
