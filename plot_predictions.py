@@ -49,8 +49,8 @@ def plot_error_curve(all_prediction_errors, all_baseline_errors, all_extra_error
     #plt.plot(range(len(all_extra_errors)), all_extra_errors)
     plt.xlabel("Example")
     plt.ylabel("Error")
-    plt.legend(["current state", "linear extrapolation", "next state prediction"], frameon=False)
-    plt.title(f"delay t = {t_delay}")
+    plt.legend(["next state prediction", "current state", "linear extrapolation"], frameon=False)
+    plt.title(f"delay t = {t_delay}s")
     plt.ylim(bottom=0)
     
     if save_path:
