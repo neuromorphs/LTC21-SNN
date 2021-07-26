@@ -1,0 +1,18 @@
+# model parameters
+load_state : "results/training/AutoregressiveLMU/2021-07-26_17.37.50.360195/model_state.pkl"                   # path to model state for loading pretrained models
+
+# test data parameters
+data_dir : data/Mixed/Validate/   # folder containing individual training files
+bound : 0.19                      # if the cart ever leaves these bounds, the data is ignored
+sample_freq : 50                  # cartpole data is recorded at ~50Hz
+skiprows : 0                      # initial rows to skip in the data .csv files
+
+# result parameters
+results_dir : results/            # folder to save the plots and weights to
+experiment_name : testing         # sub-folder of results folder
+
+# testing process parameters
+plot_prediction_every : 200       # how often to plot a prediction curve during learning
+max_samples : -1                  # just reduce training set for quick debugging
+t_switch : 0.5                    # after how many seconds to switch to autoregressive mode
+datapoints_per_file : 100         # divide by sampling rate to get the duration in s
